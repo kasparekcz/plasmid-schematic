@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Plasmid Schematic Generator</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>">
+  <!-- Google Sign-In -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- SheetJS for Excel reading -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <!-- JSZip for ZIP creation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- FileSaver for downloads -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
     
@@ -18,15 +26,86 @@
       padding: 20px;
     }
     
+    /* Login Screen */
+    .login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 50%, #f8fafc 100%);
+      z-index: 1000;
+    }
+    
+    .login-screen.hidden { display: none; }
+    
+    .login-box {
+      background: white;
+      border-radius: 20px;
+      padding: 48px;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      max-width: 400px;
+      width: 100%;
+    }
+    
+    .login-logo { font-size: 48px; margin-bottom: 16px; }
+    .login-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .login-subtitle { color: #64748b; font-size: 14px; margin-bottom: 32px; }
+    
+    .google-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .google-btn:hover { border-color: #3b82f6; background: #f8fafc; }
+    .google-btn img { width: 20px; height: 20px; }
+    
+    .login-error { margin-top: 16px; padding: 12px; background: #fef2f2; color: #b91c1c; border-radius: 8px; font-size: 13px; }
+    .login-error.hidden { display: none; }
+    
+    .login-footer { margin-top: 24px; font-size: 12px; color: #94a3b8; }
+    
+    /* Main App Styles */
+    .app-container { display: none; }
+    .app-container.visible { display: block; }
+    
     .app-header { max-width: 1280px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: space-between; }
     .app-title { display: flex; align-items: center; gap: 12px; }
     .app-title svg { color: #3b82f6; }
-    .app-title h1 { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .header-actions { display: flex; gap: 8px; }
+    .app-title h1 { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    
+    .user-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #f1f5f9;
+      border-radius: 20px;
+      font-size: 12px;
+      color: #475569;
+    }
+    
+    .user-badge img { width: 24px; height: 24px; border-radius: 50%; }
+    .user-badge button { background: none; border: none; color: #64748b; cursor: pointer; padding: 2px; display: flex; }
+    .user-badge button:hover { color: #ef4444; }
+    
     .btn-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; cursor: pointer; color: #64748b; transition: all 0.2s; }
     .btn-icon:hover { background: #f1f5f9; color: #3b82f6; }
     
-    .main-content { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+    .main-content { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
     @media (max-width: 960px) { .main-content { grid-template-columns: 1fr; } }
     
     .panel { background: white; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.03); overflow: hidden; margin-bottom: 14px; }
@@ -34,7 +113,8 @@
     .panel-header.clickable { cursor: pointer; user-select: none; transition: background 0.15s; }
     .panel-header.clickable:hover { background: #f8fafc; }
     .panel-header svg { color: #64748b; width: 18px; height: 18px; }
-    .panel-header .expand-icon { margin-left: auto; color: #94a3b8; width: 16px; height: 16px; }
+    .panel-header .expand-icon { margin-left: auto; color: #94a3b8; width: 16px; height: 16px; transition: transform 0.2s; }
+    .panel-header .expand-icon.open { transform: rotate(90deg); }
     .panel-header .badge { margin-left: auto; margin-right: 8px; padding: 3px 10px; background: #f1f5f9; border-radius: 12px; font-size: 11px; font-weight: 500; color: #64748b; }
     .panel-header .badge.connected { background: #dcfce7; color: #166534; }
     .panel-content { padding: 16px 18px; }
@@ -65,7 +145,7 @@
     .element-chip.unknown { background: #fef3c7; border-color: #fcd34d; }
     .element-chip .type-dot { width: 7px; height: 7px; border-radius: 50%; }
     .element-chip .bp-label { color: #94a3b8; font-size: 10px; }
-    .element-chip button { background: none; border: none; padding: 2px; cursor: pointer; color: #64748b; display: flex; align-items: center; }
+    .element-chip button { background: none; border: none; padding: 2px; cursor: pointer; color: #64748b; display: flex; }
     .element-chip button:hover { color: #3b82f6; }
     .element-chip button svg { width: 11px; height: 11px; }
     
@@ -105,12 +185,6 @@
     .db-status.info { background: #dbeafe; color: #1e40af; }
     .db-status svg { width: 14px; height: 14px; flex-shrink: 0; }
     
-    .setup-steps { background: #f8fafc; border-radius: 8px; padding: 12px; margin-top: 12px; }
-    .setup-steps-header { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .setup-steps ol { font-size: 11px; color: #475569; padding-left: 16px; line-height: 1.6; }
-    .setup-steps a { color: #3b82f6; text-decoration: none; }
-    .setup-steps a:hover { text-decoration: underline; }
-    
     .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
     .btn-primary, .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 9px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; flex: 1; min-width: 80px; }
     .btn-primary { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; }
@@ -137,6 +211,12 @@
     .editor-fields input:focus, .editor-fields select:focus { outline: none; border-color: #3b82f6; }
     .editor-actions { display: flex; gap: 8px; margin-top: 14px; }
     .editor-note { font-size: 11px; color: #64748b; margin-top: 10px; padding: 8px 10px; background: #eff6ff; border-radius: 6px; }
+    
+    /* Presets Section */
+    .presets-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+    .presets-row { display: flex; gap: 6px; align-items: center; }
+    .presets-select { flex: 1; padding: 9px 11px; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 12px; background: white; }
+    .presets-select:focus { outline: none; border-color: #3b82f6; }
     
     /* Settings Modal */
     .settings-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 300; backdrop-filter: blur(4px); }
@@ -172,6 +252,54 @@
     .preset-color-item .color-input::-webkit-color-swatch-wrapper { padding: 0; }
     .preset-color-item .color-input::-webkit-color-swatch { border: 1px solid #e2e8f0; border-radius: 4px; }
     
+    /* Save preset section in settings */
+    .save-preset-section { margin-top: 20px; padding: 16px; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; }
+    .save-preset-row { display: flex; gap: 8px; }
+    .save-preset-row input { flex: 1; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; }
+    .save-preset-row input:focus { outline: none; border-color: #3b82f6; }
+    
+    /* Batch Modal */
+    .batch-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 300; backdrop-filter: blur(4px); }
+    .batch-modal.hidden { display: none; }
+    .batch-content { background: white; border-radius: 16px; width: 500px; max-width: 95vw; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.25); }
+    .batch-header { padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 18px; }
+    .batch-header svg { width: 22px; height: 22px; color: #3b82f6; }
+    .batch-header .close-btn { margin-left: auto; background: none; border: none; cursor: pointer; color: #64748b; padding: 4px; display: flex; border-radius: 6px; }
+    .batch-header .close-btn:hover { background: #f1f5f9; }
+    .batch-body { padding: 24px; overflow-y: auto; flex: 1; }
+    
+    .upload-zone { border: 2px dashed #e2e8f0; border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 20px; }
+    .upload-zone:hover { border-color: #3b82f6; background: #f8fafc; }
+    .upload-zone.dragover { border-color: #3b82f6; background: #eff6ff; }
+    .upload-zone svg { width: 40px; height: 40px; color: #94a3b8; margin-bottom: 12px; }
+    .upload-zone p { font-weight: 600; color: #475569; margin-bottom: 4px; }
+    .upload-zone span { font-size: 12px; color: #94a3b8; }
+    .upload-zone input { display: none; }
+    
+    .batch-preview { background: #f8fafc; border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+    .batch-preview.hidden { display: none; }
+    .batch-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .batch-preview-title { font-weight: 600; font-size: 13px; color: #334155; }
+    .batch-preview-count { font-size: 12px; color: #64748b; }
+    .batch-preview-list { max-height: 150px; overflow-y: auto; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+    .batch-preview-item { padding: 6px 8px; background: white; border-radius: 4px; margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .batch-preview-item .name { color: #1e293b; }
+    .batch-preview-item .construct { color: #64748b; font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    
+    .batch-options { margin-bottom: 20px; }
+    .batch-option-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+    .batch-option-row:last-child { border-bottom: none; }
+    .batch-option-label { font-size: 13px; font-weight: 600; color: #334155; }
+    .batch-option-control select, .batch-option-control input { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; }
+    
+    .batch-progress { margin-bottom: 20px; }
+    .batch-progress.hidden { display: none; }
+    .progress-bar-container { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #3b82f6, #2563eb); transition: width 0.3s; }
+    .progress-text { font-size: 12px; color: #64748b; text-align: center; }
+    
+    .batch-actions { display: flex; gap: 8px; }
+    
     /* Library Panel */
     .library-panel { position: fixed; right: 20px; top: 70px; width: 340px; max-height: calc(100vh - 100px); background: white; border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); z-index: 100; overflow: hidden; display: flex; flex-direction: column; }
     .library-panel.hidden { display: none; }
@@ -182,7 +310,6 @@
     .library-empty { padding: 36px 18px; text-align: center; color: #94a3b8; }
     .library-empty svg { opacity: 0.4; margin-bottom: 14px; width: 40px; height: 40px; }
     .library-empty p { font-weight: 600; color: #64748b; margin-bottom: 4px; }
-    .library-empty span { font-size: 12px; }
     .library-list { overflow-y: auto; flex: 1; }
     .library-item { padding: 12px 18px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; transition: background 0.2s; }
     .library-item:hover { background: #f8fafc; }
@@ -206,10 +333,8 @@
     .modal-body p { color: #64748b; font-size: 13px; margin-bottom: 14px; }
     .share-url-box { display: flex; gap: 8px; }
     .share-url-box input { flex: 1; padding: 11px 13px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #f8fafc; }
-    .share-url-box button { display: inline-flex; align-items: center; gap: 6px; padding: 11px 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+    .share-url-box button { display: inline-flex; align-items: center; gap: 6px; padding: 11px 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; }
     .share-url-box button:hover { background: #2563eb; }
-    .share-url-box button svg { width: 16px; height: 16px; }
-    .share-note { margin-top: 14px !important; font-size: 12px !important; color: #94a3b8 !important; }
     
     .type-promoter { background: #3b82f6; }
     .type-gene { background: #8b5cf6; }
@@ -223,145 +348,202 @@
   </style>
 </head>
 <body>
-  <header class="app-header">
-    <div class="app-title">
-      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 15c6.667-6 13.333 0 20-6"/><path d="M9 22c1.798-1.998 2.518-3.995 2.807-5.993"/><path d="M15 2c-1.798 1.998-2.518 3.995-2.807 5.993"/><path d="M17 6l-2.5-2.5"/><path d="M14 8l-3-3"/><path d="M7 18l2.5 2.5"/><path d="M10 16l3 3"/></svg>
-      <h1>Plasmid Schematic Generator</h1>
+  <!-- Login Screen -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-box">
+      <div class="login-logo">🧬</div>
+      <h1 class="login-title">Plasmid Schematic Generator</h1>
+      <p class="login-subtitle">Sign in to access the lab plasmid database</p>
+      <button class="google-btn" id="googleSignInBtn">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+        Sign in with Google
+      </button>
+      <div class="login-error hidden" id="loginError"></div>
+      <p class="login-footer">Access restricted to authorized lab members</p>
     </div>
-    <div class="header-actions">
-      <button class="btn-icon" id="settingsBtn" title="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-      <button class="btn-icon" id="libraryToggle" title="Library"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></button>
-    </div>
-  </header>
+  </div>
   
-  <main class="main-content">
-    <div class="left-column">
-      <div class="panel">
-        <div class="panel-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Construct Input</div>
-        <div class="panel-content">
-          <div class="input-section">
-            <label class="input-label">Plasmid Shorthand Code</label>
-            <input type="text" class="construct-input" id="constructInput" placeholder="e.g., pCMV-GFP-T2A-mCherry-bGHpA" value="pCMV-FLAG-Cas9-T2A-GFP-bGHpA">
-            <div class="input-hint">Separate elements with hyphens, underscores, spaces, or pipes</div>
-          </div>
-          <div class="preview-container" id="previewContainer">
-            <div class="preview-empty" id="previewEmpty"><svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/></svg><p>Enter a construct code</p></div>
-            <div id="svgOutput"></div>
-          </div>
-          <div class="stats-row" id="statsRow"></div>
-          <div class="elements-list" id="elementsList">
-            <div class="elements-list-header"><span class="elements-list-title">Elements (click to edit)</span></div>
-            <div class="elements-chips" id="elementsChips"></div>
-          </div>
-          <div class="element-editor hidden" id="elementEditor">
-            <div class="editor-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span>Edit: <span id="editingName"></span></span></div>
-            <div class="editor-fields">
-              <label><span>Full Name</span><input type="text" id="editFullName" placeholder="Element full name"></label>
-              <div class="editor-row">
-                <label><span>Length (bp)</span><input type="number" id="editLength" min="1"></label>
-                <label><span>Type</span><select id="editType"><option value="promoter">Promoter</option><option value="gene">Gene</option><option value="fluorescent">Fluorescent</option><option value="linker">Linker/2A</option><option value="selection">Selection</option><option value="terminator">Terminator</option><option value="tag">Tag</option><option value="origin">Origin</option><option value="unknown">Unknown</option></select></label>
-              </div>
-              <div class="editor-row">
-                <label><span>Shape (optional)</span><select id="editShape"><option value="">Auto (from theme)</option><option value="rectangle">Rectangle</option><option value="arrow">Arrow</option><option value="pentagon">Pentagon</option><option value="hexagon">Hexagon</option><option value="roundedPill">Pill</option><option value="notched">Notched</option><option value="diamond">Diamond</option><option value="trapezoid">Trapezoid</option></select></label>
-                <label><span>Color (optional)</span><input type="color" id="editColor" value="#3b82f6"></label>
-              </div>
-            </div>
-            <div class="editor-actions">
-              <button class="btn-secondary" id="cancelEdit"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel</button>
-              <button class="btn-secondary" id="saveLocal"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg> Save Local</button>
-              <button class="btn-primary" id="saveToSheet"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Save to Sheet</button>
-            </div>
-            <div class="editor-note" id="editorNote">💡 "Save to Sheet" syncs this part to your Google Sheet for everyone to use.</div>
-          </div>
-        </div>
+  <!-- Main App -->
+  <div class="app-container" id="appContainer">
+    <header class="app-header">
+      <div class="app-title">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 15c6.667-6 13.333 0 20-6"/><path d="M9 22c1.798-1.998 2.518-3.995 2.807-5.993"/><path d="M15 2c-1.798 1.998-2.518 3.995-2.807 5.993"/></svg>
+        <h1>Plasmid Schematic Generator</h1>
       </div>
-    </div>
+      <div class="header-actions">
+        <div class="user-badge" id="userBadge">
+          <img id="userAvatar" src="" alt="">
+          <span id="userName"></span>
+          <button id="signOutBtn" title="Sign out"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+        </div>
+        <button class="btn-icon" id="batchBtn" title="Batch Export"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></button>
+        <button class="btn-icon" id="settingsBtn" title="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="btn-icon" id="libraryToggle" title="Library"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></button>
+      </div>
+    </header>
     
-    <div class="sidebar">
-      <div class="panel">
-        <div class="panel-header clickable" id="themeToggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>Visual Theme</span><span class="badge" id="themeBadge">Simple</span><svg class="expand-icon" id="themeExpandIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
-        <div class="panel-content hidden" id="themeContent">
-          <div class="theme-grid" id="themeGrid"></div>
-          <div class="shape-reference"><div class="shape-ref-header">Shape Reference</div><div class="shape-ref-grid" id="shapeRefGrid"></div></div>
-        </div>
-      </div>
-      
-      <div class="panel">
-        <div class="panel-header clickable" id="dbToggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span>Parts Database</span><span class="badge" id="dbBadge">Not connected</span><svg class="expand-icon" id="dbExpandIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
-        <div class="panel-content hidden" id="dbContent">
-          <div class="db-info"><p>Connect to Google Sheets for a shared, editable parts library.</p></div>
-          <input type="text" class="db-input" id="scriptUrl" placeholder="Paste your Apps Script Web App URL...">
-          <div class="db-btn-row">
-            <button class="btn-primary" id="syncParts" style="flex:1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Sync</button>
-            <button class="btn-secondary" id="testConnection"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Test</button>
+    <main class="main-content">
+      <div class="left-column">
+        <div class="panel">
+          <div class="panel-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Construct Input</div>
+          <div class="panel-content">
+            <div class="input-section">
+              <label class="input-label">Plasmid Shorthand Code</label>
+              <input type="text" class="construct-input" id="constructInput" placeholder="e.g., pCMV-GFP-T2A-mCherry-bGHpA" value="pCMV-FLAG-Cas9-T2A-GFP-bGHpA">
+              <div class="input-hint">Separate elements with hyphens, underscores, spaces, or pipes</div>
+            </div>
+            <div class="preview-container" id="previewContainer">
+              <div class="preview-empty" id="previewEmpty"><svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/></svg><p>Enter a construct code</p></div>
+              <div id="svgOutput"></div>
+            </div>
+            <div class="stats-row" id="statsRow"></div>
+            <div class="elements-list" id="elementsList">
+              <div class="elements-list-header"><span class="elements-list-title">Elements (click to edit)</span></div>
+              <div class="elements-chips" id="elementsChips"></div>
+            </div>
+            <div class="element-editor hidden" id="elementEditor">
+              <div class="editor-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span>Edit: <span id="editingName"></span></span></div>
+              <div class="editor-fields">
+                <label><span>Full Name</span><input type="text" id="editFullName" placeholder="Element full name"></label>
+                <div class="editor-row">
+                  <label><span>Length (bp)</span><input type="number" id="editLength" min="1"></label>
+                  <label><span>Type</span><select id="editType"><option value="promoter">Promoter</option><option value="gene">Gene</option><option value="fluorescent">Fluorescent</option><option value="linker">Linker/2A</option><option value="selection">Selection</option><option value="terminator">Terminator</option><option value="tag">Tag</option><option value="origin">Origin</option><option value="unknown">Unknown</option></select></label>
+                </div>
+                <div class="editor-row">
+                  <label><span>Shape</span><select id="editShape"><option value="">Auto</option><option value="rectangle">Rectangle</option><option value="arrow">Arrow</option><option value="pentagon">Pentagon</option><option value="hexagon">Hexagon</option><option value="roundedPill">Pill</option><option value="notched">Notched</option><option value="diamond">Diamond</option><option value="trapezoid">Trapezoid</option></select></label>
+                  <label><span>Color</span><input type="color" id="editColor" value="#3b82f6"></label>
+                </div>
+              </div>
+              <div class="editor-actions">
+                <button class="btn-secondary" id="cancelEdit"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel</button>
+                <button class="btn-secondary" id="saveLocal"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg> Local</button>
+                <button class="btn-primary" id="saveToSheet"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Save to Sheet</button>
+              </div>
+            </div>
           </div>
-          <div class="db-status hidden" id="dbStatus"><svg id="dbStatusIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"></svg><span id="dbStatusText"></span></div>
-          <div class="setup-steps">
-            <div class="setup-steps-header">Setup Instructions</div>
-            <ol>
-              <li>Open your <a href="https://docs.google.com/spreadsheets/d/11cAK5F4JmD_mLCuD4UIrWtjjI00GL4h0rBrXO5T-5PM/edit" target="_blank">Google Sheet</a></li>
-              <li>Go to <strong>Extensions → Apps Script</strong></li>
-              <li>Paste the script code (download below)</li>
-              <li>Click <strong>Deploy → New deployment</strong></li>
-              <li>Choose <strong>Web app</strong>, set access to <strong>Anyone</strong></li>
-              <li>Copy the URL and paste it above</li>
-            </ol>
+        </div>
+      </div>
+      
+      <div class="sidebar">
+        <div class="panel">
+          <div class="panel-header clickable" id="themeToggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>Visual Theme</span><span class="badge" id="themeBadge">Simple</span><svg class="expand-icon" id="themeExpandIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="panel-content hidden" id="themeContent">
+            <div class="theme-grid" id="themeGrid"></div>
+            <div class="shape-reference"><div class="shape-ref-header">Shape Reference</div><div class="shape-ref-grid" id="shapeRefGrid"></div></div>
+          </div>
+        </div>
+        
+        <div class="panel">
+          <div class="panel-header clickable" id="dbToggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span>Database</span><span class="badge" id="dbBadge">Not connected</span><svg class="expand-icon" id="dbExpandIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="panel-content hidden" id="dbContent">
+            <div class="db-info"><p>Connect to sync parts, users, and presets.</p></div>
+            <input type="text" class="db-input" id="scriptUrl" placeholder="Apps Script Web App URL...">
+            <div class="db-btn-row">
+              <button class="btn-primary" id="syncParts" style="flex:1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Sync</button>
+            </div>
+            <div class="db-status hidden" id="dbStatus"><svg id="dbStatusIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"></svg><span id="dbStatusText"></span></div>
+          </div>
+        </div>
+        
+        <div class="panel">
+          <div class="panel-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/></svg> Style</div>
+          <div class="panel-content">
+            <div class="control-group"><div class="preset-selector" id="presetSelector"></div></div>
+            <div class="control-group"><span class="control-label">Length Mode</span><div class="toggle-group"><button class="toggle-btn active" id="proportionalBtn">Proportional</button><button class="toggle-btn" id="fixedBtn">Fixed</button></div></div>
+            <div class="presets-section">
+              <span class="control-label">Saved Presets</span>
+              <div class="presets-row">
+                <select class="presets-select" id="savedPresets"><option value="">Load a preset...</option></select>
+                <button class="btn-secondary" id="refreshPresets" title="Refresh"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="panel">
+          <div class="panel-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export</div>
+          <div class="panel-content">
+            <div class="btn-row"><button class="btn-primary" id="exportSvg"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> SVG</button><button class="btn-primary" id="exportPng"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> PNG</button></div>
+            <div class="btn-row" style="margin-top:6px"><button class="btn-secondary" id="shareBtn"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share</button></div>
+          </div>
+        </div>
+        
+        <div class="panel">
+          <div class="panel-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg> Library</div>
+          <div class="panel-content">
+            <div class="save-section"><input type="text" id="constructName" placeholder="Construct name..."><button class="btn-primary" id="saveConstruct"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div>
+            <button class="btn-secondary" id="viewLibrary" style="width:100%;margin-top:6px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg> View (<span id="libraryCount">0</span>)</button>
           </div>
         </div>
       </div>
-      
-      <div class="panel">
-        <div class="panel-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/></svg> Style</div>
-        <div class="panel-content">
-          <div class="control-group"><div class="preset-selector" id="presetSelector"></div></div>
-          <div class="control-group"><span class="control-label">Length Mode</span><div class="toggle-group"><button class="toggle-btn active" id="proportionalBtn">Proportional</button><button class="toggle-btn" id="fixedBtn">Fixed</button></div></div>
-        </div>
-      </div>
-      
-      <div class="panel">
-        <div class="panel-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export</div>
-        <div class="panel-content">
-          <div class="btn-row"><button class="btn-primary" id="exportSvg"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> SVG</button><button class="btn-primary" id="exportPng"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> PNG</button></div>
-          <div class="btn-row" style="margin-top:6px"><button class="btn-secondary" id="shareBtn"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share</button></div>
-        </div>
-      </div>
-      
-      <div class="panel">
-        <div class="panel-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Library</div>
-        <div class="panel-content">
-          <div class="save-section"><input type="text" id="constructName" placeholder="Construct name..."><button class="btn-primary" id="saveConstruct"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div>
-          <button class="btn-secondary" id="viewLibrary" style="width:100%;margin-top:6px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> View (<span id="libraryCount">0</span>)</button>
-        </div>
-      </div>
-    </div>
-  </main>
+    </main>
+  </div>
   
   <!-- Settings Modal -->
   <div class="settings-modal hidden" id="settingsModal">
     <div class="settings-content">
-      <div class="settings-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Visual Settings</span><button class="close-btn" id="closeSettings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="settings-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span><button class="close-btn" id="closeSettings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
       <div class="settings-body">
         <div class="settings-section">
-          <div class="settings-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> Outline Style</div>
-          <div class="setting-row"><div class="setting-info"><div class="setting-label">Stroke Style</div><div class="setting-desc">How outlines are colored</div></div><div class="setting-control"><select class="setting-select" id="strokeStyle"><option value="colored">Colored (darker fill)</option><option value="black">Black</option><option value="darkgray">Dark Gray</option><option value="none">No outline</option></select></div></div>
-          <div class="setting-row"><div class="setting-info"><div class="setting-label">Stroke Width</div><div class="setting-desc">Thickness of outlines</div></div><div class="setting-control"><select class="setting-select" id="strokeWidth"><option value="0.5">Hairline (0.5)</option><option value="1">Thin (1)</option><option value="1.5">Medium (1.5)</option><option value="2" selected>Standard (2)</option><option value="2.5">Thick (2.5)</option><option value="3">Heavy (3)</option></select></div></div>
+          <div class="settings-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> Outline</div>
+          <div class="setting-row"><div class="setting-info"><div class="setting-label">Stroke Style</div></div><div class="setting-control"><select class="setting-select" id="strokeStyle"><option value="colored">Colored</option><option value="black">Black</option><option value="darkgray">Dark Gray</option><option value="none">None</option></select></div></div>
+          <div class="setting-row"><div class="setting-info"><div class="setting-label">Stroke Width</div></div><div class="setting-control"><select class="setting-select" id="strokeWidth"><option value="0.5">0.5</option><option value="1">1</option><option value="1.5">1.5</option><option value="2" selected>2</option><option value="2.5">2.5</option><option value="3">3</option></select></div></div>
         </div>
         <div class="settings-section">
           <div class="settings-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Layout</div>
           <div class="setting-row"><div class="setting-info"><div class="setting-label">Box Height</div></div><div class="setting-control"><input type="number" class="setting-input" id="boxHeight" value="50" min="20" max="100"></div></div>
-          <div class="setting-row"><div class="setting-info"><div class="setting-label">Corner Radius</div></div><div class="setting-control"><select class="setting-select" id="cornerRadius"><option value="0">Sharp (0)</option><option value="3">Slight (3)</option><option value="6" selected>Medium (6)</option><option value="10">Rounded (10)</option></select></div></div>
+          <div class="setting-row"><div class="setting-info"><div class="setting-label">Corner Radius</div></div><div class="setting-control"><select class="setting-select" id="cornerRadius"><option value="0">0</option><option value="3">3</option><option value="6" selected>6</option><option value="10">10</option></select></div></div>
           <div class="setting-row"><div class="setting-info"><div class="setting-label">Font Size</div></div><div class="setting-control"><input type="number" class="setting-input" id="fontSize" value="13" min="8" max="20"></div></div>
         </div>
         <div class="settings-section">
           <div class="settings-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Display</div>
-          <div class="setting-row"><div class="setting-info"><div class="setting-label">Label Position</div><div class="setting-desc">Where element names appear</div></div><div class="setting-control"><select class="setting-select" id="labelPosition"><option value="inside">Inside box</option><option value="above">Above box</option><option value="below">Below box</option></select></div></div>
+          <div class="setting-row"><div class="setting-info"><div class="setting-label">Label Position</div></div><div class="setting-control"><select class="setting-select" id="labelPosition"><option value="inside">Inside</option><option value="above">Above</option><option value="below">Below</option></select></div></div>
           <div class="setting-row"><div class="setting-info"><div class="setting-label">Show BP Labels</div></div><div class="setting-control"><button class="toggle-switch on" id="showLengths"></button></div></div>
           <div class="setting-row"><div class="setting-info"><div class="setting-label">Show 5'→3' Arrow</div></div><div class="setting-control"><button class="toggle-switch on" id="showArrow"></button></div></div>
-          <div class="setting-row"><div class="setting-info"><div class="setting-label">Show Total Length</div></div><div class="setting-control"><button class="toggle-switch on" id="showTotal"></button></div></div>
+          <div class="setting-row"><div class="setting-info"><div class="setting-label">Show Total</div></div><div class="setting-control"><button class="toggle-switch on" id="showTotal"></button></div></div>
         </div>
         <div class="settings-section">
-          <div class="settings-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/></svg> Element Colors</div>
+          <div class="settings-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/></svg> Colors</div>
           <div class="preset-colors-grid" id="colorGrid"></div>
+        </div>
+        <div class="save-preset-section">
+          <div class="settings-section-title" style="margin-bottom:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg> Save as Preset</div>
+          <div class="save-preset-row">
+            <input type="text" id="presetName" placeholder="Preset name...">
+            <button class="btn-primary" id="savePresetBtn"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg> Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Batch Modal -->
+  <div class="batch-modal hidden" id="batchModal">
+    <div class="batch-content">
+      <div class="batch-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Batch Export</span><button class="close-btn" id="closeBatch"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="batch-body">
+        <div class="upload-zone" id="uploadZone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Drop Excel/CSV file here</p>
+          <span>or click to browse</span>
+          <input type="file" id="batchFileInput" accept=".xlsx,.xls,.csv">
+        </div>
+        <div class="batch-preview hidden" id="batchPreview">
+          <div class="batch-preview-header"><span class="batch-preview-title">Constructs Found</span><span class="batch-preview-count" id="batchCount">0</span></div>
+          <div class="batch-preview-list" id="batchList"></div>
+        </div>
+        <div class="batch-options">
+          <div class="batch-option-row"><span class="batch-option-label">Format</span><div class="batch-option-control"><select id="batchFormat"><option value="png">PNG</option><option value="svg">SVG</option><option value="both">Both</option></select></div></div>
+          <div class="batch-option-row"><span class="batch-option-label">Width (px)</span><div class="batch-option-control"><input type="number" id="batchWidth" value="1200" min="400" max="4000"></div></div>
+          <div class="batch-option-row"><span class="batch-option-label">Resolution</span><div class="batch-option-control"><select id="batchResolution"><option value="1">1x</option><option value="2" selected>2x</option><option value="3">3x</option></select></div></div>
+        </div>
+        <div class="batch-progress hidden" id="batchProgress">
+          <div class="progress-bar-container"><div class="progress-bar" id="progressBar" style="width: 0%"></div></div>
+          <div class="progress-text" id="progressText">Processing...</div>
+        </div>
+        <div class="batch-actions">
+          <button class="btn-secondary" id="cancelBatch">Cancel</button>
+          <button class="btn-primary" id="generateBatch" disabled><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Generate ZIP</button>
         </div>
       </div>
     </div>
@@ -376,15 +558,24 @@
   <!-- Share Modal -->
   <div class="modal-overlay hidden" id="shareModal">
     <div class="modal-content">
-      <div class="modal-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg><span>Share</span><button class="close-btn" id="closeShare"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-      <div class="modal-body">
-        <p>Copy this link to share:</p>
-        <div class="share-url-box"><input type="text" id="shareUrl" readonly><button id="copyShare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>Copy</span></button></div>
-      </div>
+      <div class="modal-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/></svg><span>Share</span><button class="close-btn" id="closeShare"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="modal-body"><p>Copy this link:</p><div class="share-url-box"><input type="text" id="shareUrl" readonly><button id="copyShare"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button></div></div>
     </div>
   </div>
 
   <script>
+    // =====================================================
+    // CONFIGURATION - UPDATE THESE VALUES
+    // =====================================================
+    const CONFIG = {
+      // Your Google Cloud OAuth Client ID (get from console.cloud.google.com)
+      GOOGLE_CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
+      // Your Apps Script Web App URL
+      SCRIPT_URL: '',
+      // Set to false to disable login requirement during development
+      REQUIRE_LOGIN: false
+    };
+
     // =====================================================
     // DATA
     // =====================================================
@@ -419,24 +610,16 @@
     const DEFAULT_COLORS = { promoter: '#3b82f6', gene: '#8b5cf6', fluorescent: '#10b981', linker: '#f59e0b', selection: '#ef4444', terminator: '#6366f1', tag: '#ec4899', origin: '#14b8a6', unknown: '#9ca3af' };
     
     const PRESET_STYLES = {
-      presentation: {
-        colors: { promoter: '#3b82f6', gene: '#8b5cf6', fluorescent: '#10b981', linker: '#f59e0b', selection: '#ef4444', terminator: '#6366f1', tag: '#ec4899', origin: '#14b8a6', unknown: '#9ca3af' },
-        strokeStyle: 'colored', strokeWidth: 2, cornerRadius: 6
-      },
-      manuscript: {
-        colors: { promoter: '#e5e7eb', gene: '#d1d5db', fluorescent: '#f3f4f6', linker: '#ffffff', selection: '#e5e7eb', terminator: '#d1d5db', tag: '#f9fafb', origin: '#f3f4f6', unknown: '#f9fafb' },
-        strokeStyle: 'darkgray', strokeWidth: 1.5, cornerRadius: 3
-      },
-      patent: {
-        colors: { promoter: '#ffffff', gene: '#ffffff', fluorescent: '#ffffff', linker: '#ffffff', selection: '#ffffff', terminator: '#ffffff', tag: '#ffffff', origin: '#ffffff', unknown: '#ffffff' },
-        strokeStyle: 'black', strokeWidth: 1.5, cornerRadius: 0
-      }
+      presentation: { colors: { ...DEFAULT_COLORS }, strokeStyle: 'colored', strokeWidth: 2, cornerRadius: 6 },
+      manuscript: { colors: { promoter: '#e5e7eb', gene: '#d1d5db', fluorescent: '#f3f4f6', linker: '#ffffff', selection: '#e5e7eb', terminator: '#d1d5db', tag: '#f9fafb', origin: '#f3f4f6', unknown: '#f9fafb' }, strokeStyle: 'darkgray', strokeWidth: 1.5, cornerRadius: 3 },
+      patent: { colors: { promoter: '#ffffff', gene: '#ffffff', fluorescent: '#ffffff', linker: '#ffffff', selection: '#ffffff', terminator: '#ffffff', tag: '#ffffff', origin: '#ffffff', unknown: '#ffffff' }, strokeStyle: 'black', strokeWidth: 1.5, cornerRadius: 0 }
     };
 
     // =====================================================
     // STATE
     // =====================================================
     let state = {
+      user: null,
       constructCode: 'pCMV-FLAG-Cas9-T2A-GFP-bGHpA',
       elements: [],
       preset: 'presentation',
@@ -445,51 +628,113 @@
       partsDb: { ...DEFAULT_PARTS_DB },
       sheetParts: {},
       library: [],
+      savedPresets: [],
       editingElement: null,
-      scriptUrl: '',
+      scriptUrl: CONFIG.SCRIPT_URL,
       isConnected: false,
+      batchData: [],
       settings: { strokeStyle: 'colored', strokeWidth: 2, boxHeight: 50, cornerRadius: 6, fontSize: 13, showLengths: true, showArrow: true, showTotal: true, labelPosition: 'inside', colors: { ...DEFAULT_COLORS } }
     };
 
-    function loadState() {
-      try {
-        const saved = localStorage.getItem('plasmid-state-v3');
-        if (saved) {
-          const data = JSON.parse(saved);
-          state.library = data.library || [];
-          state.scriptUrl = data.scriptUrl || '';
-          state.sheetParts = data.sheetParts || {};
-          state.settings = { ...state.settings, ...data.settings };
-          Object.assign(state.partsDb, state.sheetParts);
+    // =====================================================
+    // AUTH
+    // =====================================================
+    function initGoogleAuth() {
+      if (!CONFIG.REQUIRE_LOGIN) {
+        showApp();
+        return;
+      }
+      
+      if (CONFIG.GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
+        console.warn('Google Client ID not configured. Running without login.');
+        showApp();
+        return;
+      }
+      
+      google.accounts.id.initialize({
+        client_id: CONFIG.GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse
+      });
+      
+      document.getElementById('googleSignInBtn').addEventListener('click', () => {
+        google.accounts.id.prompt();
+      });
+    }
+
+    async function handleCredentialResponse(response) {
+      const credential = response.credential;
+      const payload = JSON.parse(atob(credential.split('.')[1]));
+      
+      state.user = {
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture
+      };
+      
+      // Check if user is allowed
+      if (state.scriptUrl) {
+        try {
+          const res = await fetch(`${state.scriptUrl}?action=checkUser&email=${encodeURIComponent(state.user.email)}`);
+          const data = await res.json();
+          if (!data.success || !data.allowed) {
+            showLoginError('Access denied. Contact your lab admin to get access.');
+            state.user = null;
+            return;
+          }
+        } catch (e) {
+          console.error('Could not verify user:', e);
         }
-      } catch (e) { console.error('Load error:', e); }
+      }
+      
+      showApp();
     }
 
-    function saveState() {
-      localStorage.setItem('plasmid-state-v3', JSON.stringify({ library: state.library, scriptUrl: state.scriptUrl, sheetParts: state.sheetParts, settings: state.settings }));
+    function showLoginError(message) {
+      const el = document.getElementById('loginError');
+      el.textContent = message;
+      el.classList.remove('hidden');
+    }
+
+    function showApp() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('appContainer').classList.add('visible');
+      
+      if (state.user) {
+        document.getElementById('userAvatar').src = state.user.picture || '';
+        document.getElementById('userName').textContent = state.user.name || state.user.email;
+      } else {
+        document.getElementById('userBadge').style.display = 'none';
+      }
+      
+      initApp();
+    }
+
+    function signOut() {
+      state.user = null;
+      google.accounts.id.disableAutoSelect();
+      location.reload();
     }
 
     // =====================================================
-    // GOOGLE SHEETS API
+    // API
     // =====================================================
-    async function fetchPartsFromSheet() {
-      if (!state.scriptUrl) throw new Error('No script URL configured');
-      const response = await fetch(state.scriptUrl);
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || 'Failed to fetch parts');
-      return data.parts;
+    async function fetchFromSheet(action, params = {}) {
+      if (!state.scriptUrl) throw new Error('Not connected');
+      const url = new URL(state.scriptUrl);
+      url.searchParams.set('action', action);
+      Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+      const res = await fetch(url);
+      return res.json();
     }
 
-    async function savePartToSheet(part) {
-      if (!state.scriptUrl) throw new Error('No script URL configured');
-      const response = await fetch(state.scriptUrl, {
+    async function postToSheet(payload) {
+      if (!state.scriptUrl) throw new Error('Not connected');
+      const res = await fetch(state.scriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'upsert', part })
+        body: JSON.stringify(payload)
       });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || 'Failed to save part');
-      return data;
+      return res.json();
     }
 
     // =====================================================
@@ -528,32 +773,24 @@
       }
     }
 
-    function darkenColor(hex, amount = 0.2) { const num = parseInt(hex.slice(1), 16); const r = Math.max(0, (num >> 16) - Math.round(255 * amount)); const g = Math.max(0, ((num >> 8) & 0xFF) - Math.round(255 * amount)); const b = Math.max(0, (num & 0xFF) - Math.round(255 * amount)); return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`; }
-    function getTextColor(hex) { const num = parseInt(hex.slice(1), 16); return (0.299 * (num >> 16) + 0.587 * ((num >> 8) & 0xFF) + 0.114 * (num & 0xFF)) / 255 > 0.5 ? '#000' : '#fff'; }
+    function darkenColor(hex, amt = 0.2) { const n = parseInt(hex.slice(1), 16); return `#${(Math.max(0, (n >> 16) - Math.round(255 * amt)) << 16 | Math.max(0, ((n >> 8) & 0xFF) - Math.round(255 * amt)) << 8 | Math.max(0, (n & 0xFF) - Math.round(255 * amt))).toString(16).padStart(6, '0')}`; }
+    function getTextColor(hex) { const n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 0xFF) + 0.114 * (n & 0xFF)) / 255 > 0.5 ? '#000' : '#fff'; }
 
-    function generateSVG(elements, width = 900) {
+    function generateSVG(elements, width = 900, settingsOverride = null) {
       if (!elements.length) return '';
-      const s = state.settings;
+      const s = settingsOverride || state.settings;
       const presetStyle = PRESET_STYLES[state.preset] || PRESET_STYLES.presentation;
       const theme = VISUAL_THEMES[state.visualTheme];
       const totalBp = elements.reduce((sum, el) => sum + el.length, 0);
       
-      // Adjust padding based on label position
       const labelAbove = s.labelPosition === 'above';
       const labelBelow = s.labelPosition === 'below';
       const labelInside = s.labelPosition === 'inside';
       
-      const padding = { 
-        top: 50 + (labelAbove ? 20 : 0), 
-        bottom: (s.showTotal ? 55 : 40) + (labelBelow ? 20 : 0) + (s.showLengths && !labelBelow ? 0 : 0), 
-        left: 40, 
-        right: 40 
-      };
+      const padding = { top: 50 + (labelAbove ? 20 : 0), bottom: (s.showTotal ? 55 : 40) + (labelBelow ? 20 : 0), left: 40, right: 40 };
       const availableWidth = width - padding.left - padding.right;
       
-      let boxWidths = state.proportional
-        ? elements.map(el => Math.max(60, el.length * availableWidth / totalBp))
-        : elements.map(() => Math.max(60, availableWidth / elements.length));
+      let boxWidths = state.proportional ? elements.map(el => Math.max(60, el.length * availableWidth / totalBp)) : elements.map(() => Math.max(60, availableWidth / elements.length));
       const total = boxWidths.reduce((a, b) => a + b, 0);
       if (total > availableWidth) boxWidths = boxWidths.map(w => w * availableWidth / total);
       
@@ -566,44 +803,34 @@
       }
       
       let x = padding.left;
+      const colors = s.colors || presetStyle.colors;
+      
       elements.forEach((el, i) => {
         const w = boxWidths[i];
         const partData = state.partsDb[el.code];
-        
-        // Use part-specific color, then preset colors, then fallback
-        let fill = partData?.color || presetStyle.colors[el.type] || presetStyle.colors.unknown;
+        let fill = partData?.color || colors[el.type] || colors.unknown;
         let stroke = s.strokeStyle === 'black' ? '#000' : s.strokeStyle === 'darkgray' ? '#374151' : s.strokeStyle === 'none' ? 'none' : darkenColor(fill);
-        
-        // For manuscript/patent, always use their stroke style
         if (state.preset === 'manuscript') stroke = '#374151';
         if (state.preset === 'patent') stroke = '#000000';
         
         const shape = partData?.shape || theme.shapes[el.type] || 'rectangle';
         const boxY = padding.top;
+        const cr = s.cornerRadius || presetStyle.cornerRadius || 0;
         
-        svg += `<path d="${generateShapePath(shape, x, boxY, w, s.boxHeight, presetStyle.cornerRadius)}" fill="${fill}" stroke="${stroke}" stroke-width="${s.strokeStyle === 'none' ? 0 : s.strokeWidth}"/>`;
+        svg += `<path d="${generateShapePath(shape, x, boxY, w, s.boxHeight, cr)}" fill="${fill}" stroke="${stroke}" stroke-width="${s.strokeStyle === 'none' ? 0 : s.strokeWidth}"/>`;
         
-        // Element name label
         if (labelInside) {
           svg += `<text x="${x + w/2}" y="${boxY + s.boxHeight/2}" font-family="system-ui" font-size="${s.fontSize}" font-weight="600" fill="${getTextColor(fill)}" text-anchor="middle" dominant-baseline="middle">${el.code}</text>`;
         } else if (labelAbove) {
           svg += `<text x="${x + w/2}" y="${boxY - 6}" font-family="system-ui" font-size="${s.fontSize - 1}" font-weight="600" fill="#374151" text-anchor="middle">${el.code}</text>`;
         } else if (labelBelow) {
-          const labelY = boxY + s.boxHeight + 14;
-          svg += `<text x="${x + w/2}" y="${labelY}" font-family="system-ui" font-size="${s.fontSize - 1}" font-weight="600" fill="#374151" text-anchor="middle">${el.code}</text>`;
+          svg += `<text x="${x + w/2}" y="${boxY + s.boxHeight + 14}" font-family="system-ui" font-size="${s.fontSize - 1}" font-weight="600" fill="#374151" text-anchor="middle">${el.code}</text>`;
         }
         
-        // BP labels
         if (s.showLengths) {
-          let bpY;
-          if (labelBelow) {
-            bpY = boxY + s.boxHeight + 28;
-          } else {
-            bpY = boxY + s.boxHeight + 14;
-          }
+          const bpY = labelBelow ? boxY + s.boxHeight + 28 : boxY + s.boxHeight + 14;
           svg += `<text x="${x + w/2}" y="${bpY}" font-family="system-ui" font-size="10" fill="#64748b" text-anchor="middle">${el.length} bp</text>`;
         }
-        
         x += w;
       });
       
@@ -612,6 +839,115 @@
     }
 
     function generateShapePreview(shape, color = '#64748b') { return `<svg width="30" height="20" viewBox="0 0 30 20"><path d="${generateShapePath(shape, 2, 2, 26, 16, 2)}" fill="${color}" stroke="#475569" stroke-width="1"/></svg>`; }
+
+    // =====================================================
+    // BATCH PROCESSING
+    // =====================================================
+    function handleBatchFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(sheet);
+          
+          state.batchData = json.map(row => {
+            const filename = row.Filename || row.filename || row.Name || row.name || '';
+            const construct = row.Construct || row.construct || row.Code || row.code || row.Plasmid || row.plasmid || '';
+            return { filename: filename.toString().trim(), construct: construct.toString().trim() };
+          }).filter(r => r.filename && r.construct);
+          
+          updateBatchPreview();
+        } catch (err) {
+          console.error('Error parsing file:', err);
+          alert('Error parsing file. Please check the format.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function updateBatchPreview() {
+      const preview = document.getElementById('batchPreview');
+      const list = document.getElementById('batchList');
+      const count = document.getElementById('batchCount');
+      const genBtn = document.getElementById('generateBatch');
+      
+      if (state.batchData.length === 0) {
+        preview.classList.add('hidden');
+        genBtn.disabled = true;
+        return;
+      }
+      
+      preview.classList.remove('hidden');
+      count.textContent = state.batchData.length;
+      list.innerHTML = state.batchData.slice(0, 10).map(r => `<div class="batch-preview-item"><span class="name">${r.filename}</span><span class="construct">${r.construct}</span></div>`).join('') + (state.batchData.length > 10 ? `<div class="batch-preview-item"><span class="name">... and ${state.batchData.length - 10} more</span></div>` : '');
+      genBtn.disabled = false;
+    }
+
+    async function generateBatchZip() {
+      const format = document.getElementById('batchFormat').value;
+      const width = parseInt(document.getElementById('batchWidth').value) || 1200;
+      const resolution = parseInt(document.getElementById('batchResolution').value) || 2;
+      
+      const progress = document.getElementById('batchProgress');
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      progress.classList.remove('hidden');
+      
+      const zip = new JSZip();
+      const total = state.batchData.length;
+      
+      for (let i = 0; i < total; i++) {
+        const item = state.batchData[i];
+        const elements = parseConstructCode(item.construct);
+        const svg = generateSVG(elements, width);
+        
+        progressBar.style.width = `${((i + 1) / total) * 100}%`;
+        progressText.textContent = `Processing ${i + 1} of ${total}...`;
+        
+        if (format === 'svg' || format === 'both') {
+          zip.file(`${item.filename}.svg`, svg);
+        }
+        
+        if (format === 'png' || format === 'both') {
+          const pngData = await svgToPng(svg, width, resolution);
+          zip.file(`${item.filename}.png`, pngData, { base64: true });
+        }
+        
+        // Allow UI to update
+        await new Promise(r => setTimeout(r, 10));
+      }
+      
+      progressText.textContent = 'Creating ZIP...';
+      const blob = await zip.generateAsync({ type: 'blob' });
+      saveAs(blob, `plasmid-schematics-${Date.now()}.zip`);
+      
+      progress.classList.add('hidden');
+      document.getElementById('batchModal').classList.add('hidden');
+    }
+
+    function svgToPng(svgString, width, scale) {
+      return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.onload = () => {
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          ctx.scale(scale, scale);
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          
+          const dataUrl = canvas.toDataURL('image/png');
+          resolve(dataUrl.split(',')[1]);
+        };
+        
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+      });
+    }
 
     // =====================================================
     // UI
@@ -629,7 +965,7 @@
       if (!state.elements.length) { document.getElementById('statsRow').innerHTML = ''; return; }
       const totalBp = state.elements.reduce((sum, el) => sum + el.length, 0);
       const unknown = state.elements.filter(el => !el.isKnown).length;
-      document.getElementById('statsRow').innerHTML = `<div class="stat-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z"/></svg>${state.elements.length} elements</div><div class="stat-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 15c6.667-6 13.333 0 20-6"/></svg>${totalBp.toLocaleString()} bp</div>${unknown > 0 ? `<div class="stat-badge warning">${unknown} undefined</div>` : ''}`;
+      document.getElementById('statsRow').innerHTML = `<div class="stat-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z"/></svg>${state.elements.length}</div><div class="stat-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 15c6.667-6 13.333 0 20-6"/></svg>${totalBp.toLocaleString()} bp</div>${unknown > 0 ? `<div class="stat-badge warning">${unknown} undefined</div>` : ''}`;
     }
 
     function updateElementChips() {
@@ -652,10 +988,15 @@
     function updateLibraryCount() { document.getElementById('libraryCount').textContent = state.library.length; }
     function updateDbBadge() { document.getElementById('dbBadge').textContent = state.isConnected ? `${Object.keys(state.sheetParts).length} parts` : 'Not connected'; document.getElementById('dbBadge').classList.toggle('connected', state.isConnected); }
 
+    function updateSavedPresets() {
+      const select = document.getElementById('savedPresets');
+      select.innerHTML = '<option value="">Load a preset...</option>' + state.savedPresets.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+    }
+
     function renderLibrary() {
       const list = document.getElementById('libraryList');
-      if (!state.library.length) { list.innerHTML = `<div class="library-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/></svg><p>No saved constructs</p></div>`; return; }
-      list.innerHTML = state.library.map((item, i) => `<div class="library-item"><div class="item-info"><span class="item-name">${item.name}</span><span class="item-code">${item.code}</span><span class="item-date">${new Date(item.savedAt).toLocaleDateString()}</span></div><div class="item-actions"><button onclick="loadFromLibrary(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button><button onclick="deleteFromLibrary(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></div></div>`).join('');
+      if (!state.library.length) { list.innerHTML = `<div class="library-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18h8"/><path d="M3 22h18"/></svg><p>No saved constructs</p></div>`; return; }
+      list.innerHTML = state.library.map((item, i) => `<div class="library-item"><div class="item-info"><span class="item-name">${item.name}</span><span class="item-code">${item.code}</span></div><div class="item-actions"><button onclick="loadFromLibrary(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/></svg></button><button onclick="deleteFromLibrary(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div></div>`).join('');
     }
 
     function updateSettingsUI() {
@@ -674,7 +1015,7 @@
       const el = document.getElementById('dbStatus');
       el.className = `db-status ${type}`;
       document.getElementById('dbStatusText').textContent = message;
-      document.getElementById('dbStatusIcon').innerHTML = type === 'success' ? '<polyline points="20 6 9 17 4 12"/>' : type === 'error' ? '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>' : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>';
+      document.getElementById('dbStatusIcon').innerHTML = type === 'success' ? '<polyline points="20 6 9 17 4 12"/>' : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
       if (type !== 'error') setTimeout(() => el.classList.add('hidden'), 5000);
     }
 
@@ -691,121 +1032,126 @@
       document.getElementById('editShape').value = state.partsDb[el.code]?.shape || '';
       document.getElementById('editColor').value = state.partsDb[el.code]?.color || state.settings.colors[el.type] || '#3b82f6';
       document.getElementById('elementEditor').classList.remove('hidden');
-      document.getElementById('editorNote').style.display = state.isConnected ? 'block' : 'none';
-      document.getElementById('saveToSheet').style.display = state.isConnected ? 'inline-flex' : 'none';
     }
 
     function closeEditor() { state.editingElement = null; document.getElementById('elementEditor').classList.add('hidden'); }
 
     function getEditedPart() {
       if (!state.editingElement) return null;
-      const part = {
-        name: state.editingElement.code,
-        fullName: document.getElementById('editFullName').value || state.editingElement.code,
-        length: parseInt(document.getElementById('editLength').value) || 500,
-        type: document.getElementById('editType').value
-      };
+      const part = { name: state.editingElement.code, fullName: document.getElementById('editFullName').value || state.editingElement.code, length: parseInt(document.getElementById('editLength').value) || 500, type: document.getElementById('editType').value };
       const shape = document.getElementById('editShape').value;
       if (shape) part.shape = shape;
       const color = document.getElementById('editColor').value;
-      if (color && color !== state.settings.colors[part.type]) part.color = color;
+      if (color) part.color = color;
       return part;
     }
 
-    function saveLocal() {
-      const part = getEditedPart();
-      if (!part) return;
-      state.partsDb[part.name] = part;
-      saveState();
-      closeEditor();
-      updatePreview();
-    }
+    function saveLocal() { const part = getEditedPart(); if (!part) return; state.partsDb[part.name] = part; saveState(); closeEditor(); updatePreview(); }
 
     async function saveToSheet() {
       const part = getEditedPart();
       if (!part) return;
       try {
-        await savePartToSheet(part);
+        await postToSheet({ action: 'upsertPart', part });
         state.partsDb[part.name] = part;
         state.sheetParts[part.name] = part;
         saveState();
-        showDbStatus('success', `Saved "${part.name}" to sheet`);
+        showDbStatus('success', `Saved "${part.name}"`);
         closeEditor();
         updatePreview();
         updateDbBadge();
+      } catch (e) { showDbStatus('error', e.message); }
+    }
+
+    async function syncParts() {
+      const url = document.getElementById('scriptUrl').value.trim();
+      if (!url) { showDbStatus('error', 'Enter script URL'); return; }
+      state.scriptUrl = url;
+      try {
+        showDbStatus('info', 'Connecting...');
+        const partsData = await fetchFromSheet('getParts');
+        if (partsData.success) {
+          state.sheetParts = {};
+          partsData.parts.forEach(p => { state.sheetParts[p.name] = p; state.partsDb[p.name] = p; });
+        }
+        const presetsData = await fetchFromSheet('getPresets');
+        if (presetsData.success) {
+          state.savedPresets = presetsData.presets;
+          updateSavedPresets();
+        }
+        state.isConnected = true;
+        saveState();
+        showDbStatus('success', `Synced ${Object.keys(state.sheetParts).length} parts, ${state.savedPresets.length} presets`);
+        updateDbBadge();
+        updatePreview();
       } catch (e) {
+        state.isConnected = false;
         showDbStatus('error', e.message);
+        updateDbBadge();
       }
     }
 
-    function loadFromLibrary(i) {
-      const item = state.library[i];
-      state.constructCode = item.code;
-      document.getElementById('constructInput').value = item.code;
-      document.getElementById('libraryPanel').classList.add('hidden');
+    function loadPreset(name) {
+      const preset = state.savedPresets.find(p => p.name === name);
+      if (!preset) return;
+      state.visualTheme = preset.theme || 'simple';
+      state.preset = preset.preset || 'presentation';
+      state.settings = { ...state.settings, strokeStyle: preset.strokeStyle, strokeWidth: preset.strokeWidth, boxHeight: preset.boxHeight, cornerRadius: preset.cornerRadius, fontSize: preset.fontSize, labelPosition: preset.labelPosition, showLengths: preset.showLengths, showArrow: preset.showArrow, showTotal: preset.showTotal, colors: { ...DEFAULT_COLORS, ...preset.colors } };
+      saveState();
+      updatePresetButtons();
+      updateLengthModeButtons();
+      updateThemeGrid();
       updatePreview();
     }
 
-    function deleteFromLibrary(i) { state.library.splice(i, 1); saveState(); updateLibraryCount(); renderLibrary(); }
-
-    function saveToLibrary() {
-      const name = document.getElementById('constructName').value.trim() || state.constructCode.substring(0, 30);
-      state.library.unshift({ id: Date.now().toString(36), name, code: state.constructCode, savedAt: new Date().toISOString() });
-      saveState(); updateLibraryCount(); document.getElementById('constructName').value = '';
+    async function savePresetToSheet() {
+      const name = document.getElementById('presetName').value.trim();
+      if (!name) { alert('Enter a preset name'); return; }
+      const preset = { name, theme: state.visualTheme, preset: state.preset, ...state.settings, createdBy: state.user?.email || 'anonymous' };
+      try {
+        await postToSheet({ action: 'savePreset', preset });
+        showDbStatus('success', `Saved preset "${name}"`);
+        document.getElementById('presetName').value = '';
+        syncParts();
+      } catch (e) { showDbStatus('error', e.message); }
     }
+
+    function loadFromLibrary(i) { const item = state.library[i]; state.constructCode = item.code; document.getElementById('constructInput').value = item.code; document.getElementById('libraryPanel').classList.add('hidden'); updatePreview(); }
+    function deleteFromLibrary(i) { state.library.splice(i, 1); saveState(); updateLibraryCount(); renderLibrary(); }
+    function saveToLibrary() { const name = document.getElementById('constructName').value.trim() || state.constructCode.substring(0, 30); state.library.unshift({ id: Date.now().toString(36), name, code: state.constructCode, savedAt: new Date().toISOString() }); saveState(); updateLibraryCount(); document.getElementById('constructName').value = ''; }
 
     function exportSVG() { const svg = generateSVG(state.elements); if (!svg) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); a.download = `construct-${Date.now()}.svg`; a.click(); }
     function exportPNG() { const svg = generateSVG(state.elements, 1800); if (!svg) return; const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d'), img = new Image(); img.onload = () => { canvas.width = img.width * 2; canvas.height = img.height * 2; ctx.scale(2, 2); ctx.fillStyle = 'white'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); const a = document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download = `construct-${Date.now()}.png`; a.click(); }; img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg))); }
     function openShare() { document.getElementById('shareUrl').value = `${location.origin}${location.pathname}?c=${btoa(state.constructCode)}`; document.getElementById('shareModal').classList.remove('hidden'); }
-    function copyShareUrl() { document.getElementById('shareUrl').select(); document.execCommand('copy'); document.getElementById('copyShare').querySelector('span').textContent = 'Copied!'; setTimeout(() => document.getElementById('copyShare').querySelector('span').textContent = 'Copy', 2000); }
+    function copyShareUrl() { document.getElementById('shareUrl').select(); document.execCommand('copy'); }
 
-    async function syncParts() {
-      const url = document.getElementById('scriptUrl').value.trim();
-      if (!url) { showDbStatus('error', 'Enter a script URL first'); return; }
-      state.scriptUrl = url;
+    // =====================================================
+    // STATE PERSISTENCE
+    // =====================================================
+    function loadState() {
       try {
-        showDbStatus('info', 'Connecting...');
-        const parts = await fetchPartsFromSheet();
-        state.sheetParts = {};
-        parts.forEach(p => { state.sheetParts[p.name] = p; state.partsDb[p.name] = p; });
-        state.isConnected = true;
-        saveState();
-        showDbStatus('success', `Synced ${parts.length} parts`);
-        updateDbBadge();
-        updatePreview();
-      } catch (e) {
-        state.isConnected = false;
-        showDbStatus('error', e.message);
-        updateDbBadge();
-      }
+        const saved = localStorage.getItem('plasmid-state-v4');
+        if (saved) {
+          const data = JSON.parse(saved);
+          state.library = data.library || [];
+          state.scriptUrl = data.scriptUrl || CONFIG.SCRIPT_URL;
+          state.sheetParts = data.sheetParts || {};
+          state.settings = { ...state.settings, ...data.settings };
+          state.visualTheme = data.visualTheme || 'simple';
+          state.preset = data.preset || 'presentation';
+          Object.assign(state.partsDb, state.sheetParts);
+        }
+      } catch (e) { console.error('Load error:', e); }
     }
 
-    async function testConnection() {
-      const url = document.getElementById('scriptUrl').value.trim();
-      if (!url) { showDbStatus('error', 'Enter a script URL first'); return; }
-      try {
-        showDbStatus('info', 'Testing...');
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.success) {
-          showDbStatus('success', `Connected! Found ${data.parts?.length || 0} parts`);
-          state.isConnected = true;
-        } else {
-          showDbStatus('error', data.error || 'Connection failed');
-          state.isConnected = false;
-        }
-        updateDbBadge();
-      } catch (e) {
-        showDbStatus('error', 'Could not reach the script. Check the URL.');
-        state.isConnected = false;
-        updateDbBadge();
-      }
+    function saveState() {
+      localStorage.setItem('plasmid-state-v4', JSON.stringify({ library: state.library, scriptUrl: state.scriptUrl, sheetParts: state.sheetParts, settings: state.settings, visualTheme: state.visualTheme, preset: state.preset }));
     }
 
     // =====================================================
     // INIT
     // =====================================================
-    function init() {
+    function initApp() {
       loadState();
       
       const params = new URLSearchParams(location.search);
@@ -820,27 +1166,20 @@
       document.getElementById('constructInput').addEventListener('input', e => { state.constructCode = e.target.value; updatePreview(); });
       document.getElementById('presetSelector').addEventListener('click', e => { 
         if (e.target.classList.contains('preset-btn')) { 
-          state.preset = e.target.dataset.preset; 
-          // Apply preset styles
+          state.preset = e.target.dataset.preset;
           const presetStyle = PRESET_STYLES[state.preset];
-          if (presetStyle) {
-            state.settings.colors = { ...presetStyle.colors };
-            state.settings.strokeStyle = presetStyle.strokeStyle;
-            state.settings.strokeWidth = presetStyle.strokeWidth;
-            state.settings.cornerRadius = presetStyle.cornerRadius;
-          }
-          saveState();
-          updatePresetButtons(); 
-          updatePreview(); 
-        } 
+          if (presetStyle) { state.settings.colors = { ...presetStyle.colors }; state.settings.strokeStyle = presetStyle.strokeStyle; state.settings.strokeWidth = presetStyle.strokeWidth; state.settings.cornerRadius = presetStyle.cornerRadius; }
+          saveState(); updatePresetButtons(); updatePreview();
+        }
       });
       document.getElementById('proportionalBtn').addEventListener('click', () => { state.proportional = true; updateLengthModeButtons(); updatePreview(); });
       document.getElementById('fixedBtn').addEventListener('click', () => { state.proportional = false; updateLengthModeButtons(); updatePreview(); });
-      document.getElementById('themeToggle').addEventListener('click', () => { document.getElementById('themeContent').classList.toggle('hidden'); });
-      document.getElementById('themeGrid').addEventListener('click', e => { const card = e.target.closest('.theme-card'); if (card) { state.visualTheme = card.dataset.theme; updateThemeGrid(); updatePreview(); } });
-      document.getElementById('dbToggle').addEventListener('click', () => document.getElementById('dbContent').classList.toggle('hidden'));
+      document.getElementById('themeToggle').addEventListener('click', () => { document.getElementById('themeContent').classList.toggle('hidden'); document.getElementById('themeExpandIcon').classList.toggle('open'); });
+      document.getElementById('themeGrid').addEventListener('click', e => { const card = e.target.closest('.theme-card'); if (card) { state.visualTheme = card.dataset.theme; saveState(); updateThemeGrid(); updatePreview(); } });
+      document.getElementById('dbToggle').addEventListener('click', () => { document.getElementById('dbContent').classList.toggle('hidden'); document.getElementById('dbExpandIcon').classList.toggle('open'); });
       document.getElementById('syncParts').addEventListener('click', syncParts);
-      document.getElementById('testConnection').addEventListener('click', testConnection);
+      document.getElementById('savedPresets').addEventListener('change', e => { if (e.target.value) loadPreset(e.target.value); });
+      document.getElementById('refreshPresets').addEventListener('click', syncParts);
       document.getElementById('cancelEdit').addEventListener('click', closeEditor);
       document.getElementById('saveLocal').addEventListener('click', saveLocal);
       document.getElementById('saveToSheet').addEventListener('click', saveToSheet);
@@ -854,6 +1193,7 @@
       document.getElementById('viewLibrary').addEventListener('click', () => { renderLibrary(); document.getElementById('libraryPanel').classList.remove('hidden'); });
       document.getElementById('libraryToggle').addEventListener('click', () => { renderLibrary(); document.getElementById('libraryPanel').classList.toggle('hidden'); });
       document.getElementById('closeLibrary').addEventListener('click', () => document.getElementById('libraryPanel').classList.add('hidden'));
+      document.getElementById('signOutBtn').addEventListener('click', signOut);
       
       // Settings
       document.getElementById('settingsBtn').addEventListener('click', () => { updateSettingsUI(); document.getElementById('settingsModal').classList.remove('hidden'); });
@@ -866,11 +1206,35 @@
         document.getElementById(id).addEventListener('click', e => { e.target.classList.toggle('on'); state.settings[id] = e.target.classList.contains('on'); saveState(); updatePreview(); });
       });
       document.getElementById('colorGrid').addEventListener('input', e => { if (e.target.classList.contains('color-input')) { state.settings.colors[e.target.dataset.type] = e.target.value; saveState(); updatePreview(); } });
+      document.getElementById('savePresetBtn').addEventListener('click', savePresetToSheet);
       
-      updatePresetButtons(); updateLengthModeButtons(); updateThemeGrid(); updateShapeReference(); updateLibraryCount(); updateDbBadge(); updatePreview();
+      // Batch
+      document.getElementById('batchBtn').addEventListener('click', () => document.getElementById('batchModal').classList.remove('hidden'));
+      document.getElementById('closeBatch').addEventListener('click', () => document.getElementById('batchModal').classList.add('hidden'));
+      document.getElementById('cancelBatch').addEventListener('click', () => document.getElementById('batchModal').classList.add('hidden'));
+      document.getElementById('batchModal').addEventListener('click', e => { if (e.target.id === 'batchModal') document.getElementById('batchModal').classList.add('hidden'); });
+      
+      const uploadZone = document.getElementById('uploadZone');
+      const fileInput = document.getElementById('batchFileInput');
+      uploadZone.addEventListener('click', () => fileInput.click());
+      uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+      uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+      uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleBatchFile(e.dataTransfer.files[0]); });
+      fileInput.addEventListener('change', e => { if (e.target.files.length) handleBatchFile(e.target.files[0]); });
+      document.getElementById('generateBatch').addEventListener('click', generateBatchZip);
+      
+      updatePresetButtons(); updateLengthModeButtons(); updateThemeGrid(); updateShapeReference(); updateLibraryCount(); updateDbBadge(); updateSavedPresets(); updatePreview();
     }
     
-    document.addEventListener('DOMContentLoaded', init);
+    // Start
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof google !== 'undefined' && google.accounts) {
+        initGoogleAuth();
+      } else {
+        // Google Sign-In not loaded, skip auth
+        showApp();
+      }
+    });
   </script>
 </body>
 </html>
