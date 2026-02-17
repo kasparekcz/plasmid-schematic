@@ -573,7 +573,7 @@
       // Your Apps Script Web App URL
       SCRIPT_URL: '',
       // Set to false to disable login requirement during development
-      REQUIRE_LOGIN: false
+      REQUIRE_LOGIN: true
     };
 
     // =====================================================
@@ -645,7 +645,7 @@
         return;
       }
       
-      if (CONFIG.GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
+      if (CONFIG.GOOGLE_CLIENT_ID === '198079184243-bci4dekh1gck9o17jgdqalpmablgea4d.apps.googleusercontent.com') {
         console.warn('Google Client ID not configured. Running without login.');
         showApp();
         return;
