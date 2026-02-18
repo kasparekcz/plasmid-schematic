@@ -1096,13 +1096,30 @@
     function loadPreset(name) {
       const preset = state.savedPresets.find(p => p.name === name);
       if (!preset) return;
-      state.visualTheme = preset.theme || 'simple';
-      state.preset = preset.preset || 'presentation';
-      state.settings = { ...state.settings, strokeStyle: preset.strokeStyle, strokeWidth: preset.strokeWidth, boxHeight: preset.boxHeight, cornerRadius: preset.cornerRadius, fontSize: preset.fontSize, labelPosition: preset.labelPosition, showLengths: preset.showLengths, showArrow: preset.showArrow, showTotal: preset.showTotal, colors: { ...DEFAULT_COLORS, ...preset.colors } };
+      
+      // Handle both old format (flat) and new format (nested settings)
+      const settings = preset.settings || preset;
+      
+      state.visualTheme = settings.theme || 'simple';
+      state.preset = settings.preset || 'presentation';
+      state.settings = { 
+        ...state.settings, 
+        strokeStyle: settings.strokeStyle, 
+        strokeWidth: settings.strokeWidth, 
+        boxHeight: settings.boxHeight, 
+        cornerRadius: settings.cornerRadius, 
+        fontSize: settings.fontSize, 
+        labelPosition: settings.labelPosition, 
+        showLengths: settings.showLengths, 
+        showArrow: settings.showArrow, 
+        showTotal: settings.showTotal, 
+        colors: { ...DEFAULT_COLORS, ...settings.colors } 
+      };
       saveState();
       updatePresetButtons();
       updateLengthModeButtons();
       updateThemeGrid();
+      updateSettingsUI();
       updatePreview();
     }
 
@@ -1110,12 +1127,24 @@
       const name = document.getElementById('presetName').value.trim();
       if (!name) { alert('Enter a preset name'); return; }
       if (!state.isConnected) { alert('Connect to database first (click Sync)'); return; }
-      const preset = { name, theme: state.visualTheme, preset: state.preset, ...state.settings, createdBy: state.user?.email || 'anonymous' };
+      const preset = { 
+        name, 
+        settings: {
+          theme: state.visualTheme, 
+          preset: state.preset, 
+          ...state.settings
+        },
+        createdBy: state.user?.email || 'anonymous' 
+      };
       try {
-        await postToSheet({ action: 'savePreset', preset });
-        showDbStatus('success', `Saved preset "${name}"`);
-        document.getElementById('presetName').value = '';
-        syncParts();
+        const result = await postToSheet({ action: 'savePreset', preset });
+        if (result.success) {
+          showDbStatus('success', `Saved preset "${name}"`);
+          document.getElementById('presetName').value = '';
+          syncParts();
+        } else {
+          showDbStatus('error', result.error || 'Failed to save preset');
+        }
       } catch (e) { showDbStatus('error', e.message); }
     }
 
