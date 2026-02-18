@@ -638,53 +638,111 @@
     // =====================================================
     // AUTH
     // =====================================================
-    function initGoogleAuth() {
-      if (!CONFIG.REQUIRE_LOGIN) {
-        showApp();
-        return;
+    
+    // Load scriptUrl from localStorage early (needed for user check)
+    function loadScriptUrl() {
+      try {
+        const saved = localStorage.getItem('plasmid-state-v5');
+        if (saved) {
+          const data = JSON.parse(saved);
+          state.scriptUrl = data.scriptUrl || '';
+        }
+      } catch (e) {}
+    }
+    
+    // Check if we have a stored valid session
+    function getStoredSession() {
+      try {
+        const session = localStorage.getItem('plasmid-user-session');
+        if (session) {
+          const data = JSON.parse(session);
+          // Session expires after 7 days
+          if (data.expiresAt && Date.now() < data.expiresAt) {
+            return data.user;
+          }
+          // Session expired, clear it
+          localStorage.removeItem('plasmid-user-session');
+        }
+      } catch (e) {}
+      return null;
+    }
+    
+    // Store session after successful login
+    function storeSession(user) {
+      const session = {
+        user: user,
+        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+      };
+      localStorage.setItem('plasmid-user-session', JSON.stringify(session));
+    }
+    
+    // Clear session on sign out
+    function clearSession() {
+      localStorage.removeItem('plasmid-user-session');
+    }
+    
+    async function checkUserAllowed(email) {
+      if (!state.scriptUrl) {
+        console.warn('No script URL configured - user check skipped');
+        return { allowed: true, reason: 'no-script' };
       }
       
-      if (CONFIG.GOOGLE_CLIENT_ID === '198079184243-bci4dekh1gck9o17jgdqalpmablgea4d.apps.googleusercontent.com') {
-        console.warn('Google Client ID not configured. Running without login.');
-        showApp();
-        return;
+      try {
+        const res = await fetch(`${state.scriptUrl}?action=checkUser&email=${encodeURIComponent(email)}`);
+        const data = await res.json();
+        
+        if (!data.success) {
+          return { allowed: false, reason: 'check-failed' };
+        }
+        
+        // Check for 'allowed' or 'authorized' (script uses 'authorized')
+        if (data.allowed === true || data.authorized === true) {
+          return { allowed: true, role: data.role };
+        }
+        
+        return { allowed: false, reason: 'not-in-list' };
+      } catch (e) {
+        console.error('User check failed:', e);
+        // On network error, deny access for security
+        return { allowed: false, reason: 'network-error' };
       }
-      
-      google.accounts.id.initialize({
-        client_id: CONFIG.GOOGLE_CLIENT_ID,
-        callback: handleCredentialResponse
-      });
-      
-      document.getElementById('googleSignInBtn').addEventListener('click', () => {
-        google.accounts.id.prompt();
-      });
     }
 
     async function handleCredentialResponse(response) {
       const credential = response.credential;
       const payload = JSON.parse(atob(credential.split('.')[1]));
       
-      state.user = {
+      const user = {
         email: payload.email,
         name: payload.name,
         picture: payload.picture
       };
       
       // Check if user is allowed
-      if (state.scriptUrl) {
-        try {
-          const res = await fetch(`${state.scriptUrl}?action=checkUser&email=${encodeURIComponent(state.user.email)}`);
-          const data = await res.json();
-          if (!data.success || !data.allowed) {
-            showLoginError('Access denied. Contact your lab admin to get access.');
-            state.user = null;
-            return;
-          }
-        } catch (e) {
-          console.error('Could not verify user:', e);
+      showLoginError('Checking access...');
+      document.getElementById('loginError').classList.remove('hidden');
+      document.getElementById('loginError').style.background = '#dbeafe';
+      document.getElementById('loginError').style.color = '#1e40af';
+      
+      const result = await checkUserAllowed(user.email);
+      
+      if (!result.allowed) {
+        document.getElementById('loginError').style.background = '#fef2f2';
+        document.getElementById('loginError').style.color = '#b91c1c';
+        
+        if (result.reason === 'network-error') {
+          showLoginError('Could not verify access. Please check your connection and try again.');
+        } else if (result.reason === 'not-in-list') {
+          showLoginError('Access denied. Contact your lab admin to get access.');
+        } else {
+          showLoginError('Access verification failed. Please try again.');
         }
+        return;
       }
       
+      // Success - store session and show app
+      state.user = user;
+      storeSession(user);
       showApp();
     }
 
@@ -710,7 +768,10 @@
 
     function signOut() {
       state.user = null;
-      google.accounts.id.disableAutoSelect();
+      clearSession();
+      if (typeof google !== 'undefined' && google.accounts) {
+        google.accounts.id.disableAutoSelect();
+      }
       location.reload();
     }
 
@@ -1329,23 +1390,38 @@
     }
     
     // Start
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Load scriptUrl early (needed for user verification)
+      loadScriptUrl();
+      
       if (!CONFIG.REQUIRE_LOGIN) {
-        // Login not required, show app directly
         showApp();
         return;
       }
       
-      // Login required - keep login screen visible and wait for Google to load
+      // Check for existing valid session
+      const storedUser = getStoredSession();
+      if (storedUser) {
+        // Re-verify the user is still allowed (in case they were removed)
+        const result = await checkUserAllowed(storedUser.email);
+        if (result.allowed) {
+          state.user = storedUser;
+          showApp();
+          return;
+        } else {
+          // User no longer allowed, clear session
+          clearSession();
+        }
+      }
+      
+      // No valid session - show login screen and wait for Google
       function initWhenReady() {
         if (typeof google !== 'undefined' && google.accounts) {
-          // Google library loaded, initialize auth
           google.accounts.id.initialize({
             client_id: CONFIG.GOOGLE_CLIENT_ID,
             callback: handleCredentialResponse
           });
           
-          // Render Google's official sign-in button
           google.accounts.id.renderButton(
             document.getElementById('googleSignInBtn'),
             { 
@@ -1357,11 +1433,10 @@
             }
           );
           
-          // Also try One Tap (shows in corner)
+          // Try One Tap for returning users
           google.accounts.id.prompt();
           
         } else {
-          // Wait and try again
           setTimeout(initWhenReady, 100);
         }
       }
