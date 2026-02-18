@@ -1076,9 +1076,14 @@
           state.savedPresets = presetsData.presets;
           updateSavedPresets();
         }
+        const libraryData = await fetchFromSheet('getLibrary');
+        if (libraryData.success && libraryData.constructs) {
+          state.library = libraryData.constructs;
+          updateLibraryCount();
+        }
         state.isConnected = true;
         saveState();
-        showDbStatus('success', `Synced ${Object.keys(state.sheetParts).length} parts, ${state.savedPresets.length} presets`);
+        showDbStatus('success', `Synced ${Object.keys(state.sheetParts).length} parts, ${state.savedPresets.length} presets, ${state.library.length} constructs`);
         updateDbBadge();
         updatePreview();
       } catch (e) {
@@ -1104,6 +1109,7 @@
     async function savePresetToSheet() {
       const name = document.getElementById('presetName').value.trim();
       if (!name) { alert('Enter a preset name'); return; }
+      if (!state.isConnected) { alert('Connect to database first (click Sync)'); return; }
       const preset = { name, theme: state.visualTheme, preset: state.preset, ...state.settings, createdBy: state.user?.email || 'anonymous' };
       try {
         await postToSheet({ action: 'savePreset', preset });
@@ -1113,9 +1119,53 @@
       } catch (e) { showDbStatus('error', e.message); }
     }
 
-    function loadFromLibrary(i) { const item = state.library[i]; state.constructCode = item.code; document.getElementById('constructInput').value = item.code; document.getElementById('libraryPanel').classList.add('hidden'); updatePreview(); }
-    function deleteFromLibrary(i) { state.library.splice(i, 1); saveState(); updateLibraryCount(); renderLibrary(); }
-    function saveToLibrary() { const name = document.getElementById('constructName').value.trim() || state.constructCode.substring(0, 30); state.library.unshift({ id: Date.now().toString(36), name, code: state.constructCode, savedAt: new Date().toISOString() }); saveState(); updateLibraryCount(); document.getElementById('constructName').value = ''; }
+    function loadFromLibrary(i) { 
+      const item = state.library[i]; 
+      state.constructCode = item.code; 
+      document.getElementById('constructInput').value = item.code; 
+      document.getElementById('libraryPanel').classList.add('hidden'); 
+      saveState(); // Remember the last construct
+      updatePreview(); 
+    }
+    
+    async function deleteFromLibrary(i) { 
+      const item = state.library[i];
+      if (state.isConnected && item.id) {
+        try {
+          await postToSheet({ action: 'deleteConstruct', id: item.id });
+        } catch (e) { console.error('Failed to delete from sheet:', e); }
+      }
+      state.library.splice(i, 1); 
+      saveState(); 
+      updateLibraryCount(); 
+      renderLibrary(); 
+    }
+    
+    async function saveToLibrary() { 
+      const name = document.getElementById('constructName').value.trim() || state.constructCode.substring(0, 30); 
+      const construct = { 
+        id: Date.now().toString(36), 
+        name, 
+        code: state.constructCode, 
+        createdBy: state.user?.email || 'anonymous',
+        createdAt: new Date().toISOString() 
+      };
+      
+      // Save to Google Sheet if connected
+      if (state.isConnected) {
+        try {
+          await postToSheet({ action: 'saveConstruct', construct });
+          showDbStatus('success', `Saved "${name}" to library`);
+        } catch (e) { 
+          showDbStatus('error', 'Failed to save to sheet: ' + e.message); 
+        }
+      }
+      
+      state.library.unshift(construct); 
+      saveState(); 
+      updateLibraryCount(); 
+      document.getElementById('constructName').value = ''; 
+    }
 
     function exportSVG() { const svg = generateSVG(state.elements); if (!svg) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); a.download = `construct-${Date.now()}.svg`; a.click(); }
     function exportPNG() { const svg = generateSVG(state.elements, 1800); if (!svg) return; const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d'), img = new Image(); img.onload = () => { canvas.width = img.width * 2; canvas.height = img.height * 2; ctx.scale(2, 2); ctx.fillStyle = 'white'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); const a = document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download = `construct-${Date.now()}.png`; a.click(); }; img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg))); }
@@ -1127,7 +1177,7 @@
     // =====================================================
     function loadState() {
       try {
-        const saved = localStorage.getItem('plasmid-state-v4');
+        const saved = localStorage.getItem('plasmid-state-v5');
         if (saved) {
           const data = JSON.parse(saved);
           state.library = data.library || [];
@@ -1136,13 +1186,24 @@
           state.settings = { ...state.settings, ...data.settings };
           state.visualTheme = data.visualTheme || 'simple';
           state.preset = data.preset || 'presentation';
+          state.constructCode = data.constructCode || state.constructCode; // Remember last construct
+          state.isConnected = data.isConnected || false;
           Object.assign(state.partsDb, state.sheetParts);
         }
       } catch (e) { console.error('Load error:', e); }
     }
 
     function saveState() {
-      localStorage.setItem('plasmid-state-v4', JSON.stringify({ library: state.library, scriptUrl: state.scriptUrl, sheetParts: state.sheetParts, settings: state.settings, visualTheme: state.visualTheme, preset: state.preset }));
+      localStorage.setItem('plasmid-state-v5', JSON.stringify({ 
+        library: state.library, 
+        scriptUrl: state.scriptUrl, 
+        sheetParts: state.sheetParts, 
+        settings: state.settings, 
+        visualTheme: state.visualTheme, 
+        preset: state.preset,
+        constructCode: state.constructCode, // Save current construct
+        isConnected: state.isConnected
+      }));
     }
 
     // =====================================================
@@ -1160,7 +1221,7 @@
       document.getElementById('presetSelector').innerHTML = ['presentation', 'manuscript', 'patent'].map(p => `<button class="preset-btn" data-preset="${p}">${p.charAt(0).toUpperCase() + p.slice(1)}</button>`).join('');
 
       // Events
-      document.getElementById('constructInput').addEventListener('input', e => { state.constructCode = e.target.value; updatePreview(); });
+      document.getElementById('constructInput').addEventListener('input', e => { state.constructCode = e.target.value; updatePreview(); saveState(); });
       document.getElementById('presetSelector').addEventListener('click', e => { 
         if (e.target.classList.contains('preset-btn')) { 
           state.preset = e.target.dataset.preset;
