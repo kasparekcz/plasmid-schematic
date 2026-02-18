@@ -645,7 +645,7 @@
         return;
       }
       
-      if (CONFIG.GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
+      if (CONFIG.GOOGLE_CLIENT_ID === '198079184243-bci4dekh1gck9o17jgdqalpmablgea4d.apps.googleusercontent.com') {
         console.warn('Google Client ID not configured. Running without login.');
         showApp();
         return;
@@ -1228,12 +1228,33 @@
     
     // Start
     document.addEventListener('DOMContentLoaded', () => {
-      if (typeof google !== 'undefined' && google.accounts) {
-        initGoogleAuth();
-      } else {
-        // Google Sign-In not loaded, skip auth
+      if (!CONFIG.REQUIRE_LOGIN) {
+        // Login not required, show app directly
         showApp();
+        return;
       }
+      
+      // Login required - keep login screen visible and wait for Google to load
+      // The login screen is visible by default (app-container is hidden)
+      
+      function initWhenReady() {
+        if (typeof google !== 'undefined' && google.accounts) {
+          // Google library loaded, initialize auth
+          google.accounts.id.initialize({
+            client_id: CONFIG.GOOGLE_CLIENT_ID,
+            callback: handleCredentialResponse
+          });
+          
+          document.getElementById('googleSignInBtn').addEventListener('click', () => {
+            google.accounts.id.prompt();
+          });
+        } else {
+          // Wait and try again
+          setTimeout(initWhenReady, 100);
+        }
+      }
+      
+      initWhenReady();
     });
   </script>
 </body>
