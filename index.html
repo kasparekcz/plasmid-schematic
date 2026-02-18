@@ -498,6 +498,8 @@
           <div class="setting-row"><div class="setting-info"><div class="setting-label">Show BP Labels</div></div><div class="setting-control"><button class="toggle-switch on" id="showLengths"></button></div></div>
           <div class="setting-row"><div class="setting-info"><div class="setting-label">Show 5'→3' Arrow</div></div><div class="setting-control"><button class="toggle-switch on" id="showArrow"></button></div></div>
           <div class="setting-row"><div class="setting-info"><div class="setting-label">Show Total</div></div><div class="setting-control"><button class="toggle-switch on" id="showTotal"></button></div></div>
+          <div class="setting-row"><div class="setting-info"><div class="setting-label">DNA Backbone Line</div></div><div class="setting-control"><button class="toggle-switch" id="showBackbone"></button></div></div>
+          <div class="setting-row"><div class="setting-info"><div class="setting-label">Backbone Width</div></div><div class="setting-control"><select class="setting-select" id="backboneWidth"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div></div>
         </div>
         <div class="settings-section">
           <div class="settings-section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/></svg> Colors</div>
@@ -630,7 +632,7 @@
       scriptUrl: CONFIG.SCRIPT_URL,
       isConnected: false,
       batchData: [],
-      settings: { strokeStyle: 'colored', strokeWidth: 2, boxHeight: 50, cornerRadius: 6, fontSize: 13, showLengths: true, showArrow: true, showTotal: true, labelPosition: 'inside', colors: { ...DEFAULT_COLORS } }
+      settings: { strokeStyle: 'colored', strokeWidth: 2, boxHeight: 50, cornerRadius: 6, fontSize: 13, showLengths: true, showArrow: true, showTotal: true, showBackbone: false, backboneWidth: 2, labelPosition: 'inside', colors: { ...DEFAULT_COLORS } }
     };
 
     // =====================================================
@@ -796,7 +798,17 @@
       
       if (s.showArrow) {
         const ay = padding.top - 25 - (labelAbove ? 20 : 0);
-        svg += `<path d="M ${padding.left} ${ay} L ${width - padding.right} ${ay}" stroke="#94a3b8" stroke-width="1.5" fill="none"/><path d="M ${width - padding.right - 8} ${ay - 4} L ${width - padding.right} ${ay} L ${width - padding.right - 8} ${ay + 4}" stroke="#94a3b8" stroke-width="1.5" fill="none"/><text x="${padding.left}" y="${ay - 5}" font-family="system-ui" font-size="10" fill="#64748b">5'</text><text x="${width - padding.right + 5}" y="${ay + 4}" font-family="system-ui" font-size="10" fill="#64748b">3'</text>`;
+        svg += `<path d="M ${padding.left} ${ay} L ${width - padding.right} ${ay}" stroke="#94a3b8" stroke-width="1.5" fill="none"/>`;
+        svg += `<path d="M ${width - padding.right - 8} ${ay - 4} L ${width - padding.right} ${ay} L ${width - padding.right - 8} ${ay + 4}" stroke="#94a3b8" stroke-width="1.5" fill="none"/>`;
+        svg += `<text x="${padding.left}" y="${ay - 5}" font-family="system-ui" font-size="10" fill="#64748b">5'</text>`;
+        svg += `<text x="${width - padding.right + 5}" y="${ay - 5}" font-family="system-ui" font-size="10" fill="#64748b">3'</text>`;
+      }
+      
+      // DNA backbone line (drawn behind features)
+      if (s.showBackbone) {
+        const backboneY = padding.top + s.boxHeight / 2;
+        const backboneWidth = s.backboneWidth || 2;
+        svg += `<line x1="${padding.left}" y1="${backboneY}" x2="${width - padding.right}" y2="${backboneY}" stroke="#1e293b" stroke-width="${backboneWidth}"/>`;
       }
       
       let x = padding.left;
@@ -1004,7 +1016,8 @@
       document.getElementById('cornerRadius').value = s.cornerRadius;
       document.getElementById('fontSize').value = s.fontSize;
       document.getElementById('labelPosition').value = s.labelPosition || 'inside';
-      ['showLengths', 'showArrow', 'showTotal'].forEach(id => document.getElementById(id).classList.toggle('on', s[id]));
+      document.getElementById('backboneWidth').value = s.backboneWidth || 2;
+      ['showLengths', 'showArrow', 'showTotal', 'showBackbone'].forEach(id => document.getElementById(id).classList.toggle('on', s[id]));
       document.getElementById('colorGrid').innerHTML = Object.entries(ELEMENT_TYPES).filter(([k]) => k !== 'unknown').map(([k, v]) => `<div class="preset-color-item"><span>${v.label}</span><input type="color" class="color-input" data-type="${k}" value="${s.colors[k] || DEFAULT_COLORS[k]}"></div>`).join('');
     }
 
@@ -1112,7 +1125,9 @@
         labelPosition: settings.labelPosition, 
         showLengths: settings.showLengths, 
         showArrow: settings.showArrow, 
-        showTotal: settings.showTotal, 
+        showTotal: settings.showTotal,
+        showBackbone: settings.showBackbone,
+        backboneWidth: settings.backboneWidth,
         colors: { ...DEFAULT_COLORS, ...settings.colors } 
       };
       saveState();
@@ -1286,10 +1301,10 @@
       document.getElementById('settingsBtn').addEventListener('click', () => { updateSettingsUI(); document.getElementById('settingsModal').classList.remove('hidden'); });
       document.getElementById('closeSettings').addEventListener('click', () => document.getElementById('settingsModal').classList.add('hidden'));
       document.getElementById('settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') document.getElementById('settingsModal').classList.add('hidden'); });
-      ['strokeStyle', 'strokeWidth', 'boxHeight', 'cornerRadius', 'fontSize', 'labelPosition'].forEach(id => {
-        document.getElementById(id).addEventListener('change', e => { state.settings[id] = ['strokeWidth', 'boxHeight', 'cornerRadius', 'fontSize'].includes(id) ? parseFloat(e.target.value) : e.target.value; saveState(); updatePreview(); });
+      ['strokeStyle', 'strokeWidth', 'boxHeight', 'cornerRadius', 'fontSize', 'labelPosition', 'backboneWidth'].forEach(id => {
+        document.getElementById(id).addEventListener('change', e => { state.settings[id] = ['strokeWidth', 'boxHeight', 'cornerRadius', 'fontSize', 'backboneWidth'].includes(id) ? parseFloat(e.target.value) : e.target.value; saveState(); updatePreview(); });
       });
-      ['showLengths', 'showArrow', 'showTotal'].forEach(id => {
+      ['showLengths', 'showArrow', 'showTotal', 'showBackbone'].forEach(id => {
         document.getElementById(id).addEventListener('click', e => { e.target.classList.toggle('on'); state.settings[id] = e.target.classList.contains('on'); saveState(); updatePreview(); });
       });
       document.getElementById('colorGrid').addEventListener('input', e => { if (e.target.classList.contains('color-input')) { state.settings.colors[e.target.dataset.type] = e.target.value; saveState(); updatePreview(); } });
